@@ -1,0 +1,8 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}",
+        ".vscode{,/**}"
+    ],
+    "appService.defaultWebAppToDeploy": "/subscriptions/77608eae-f5ff-4c9e-a7e5-9f9b307df56d/resourceGroups/RG-Fiap/providers/Microsoft.Web/sites/techchallengeapp",
+    "appService.deploySubpath": "."
+}

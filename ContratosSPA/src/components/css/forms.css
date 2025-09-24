@@ -1,0 +1,83 @@
+/* Tabela */
+.dt-wrapper{ width:100%; overflow:auto; }
+.dt-table{ width:100%; border-collapse: collapse; background:#fff; }
+.dt-table th, .dt-table td{ padding:12px 10px; border-bottom:1px solid var(--border); text-align:left; }
+.dt-table thead th{ background:#f8fafc; font-weight:800; color:#0f172a; position:sticky; top:0; }
+.dt-table tr:hover td{ background:#fafbff; }
+.dt-table .sortable{ cursor:pointer; user-select:none; }
+.dt-table .sort-indicator{ opacity:.6; margin-left:6px; }
+.dt-table .empty{ text-align:center; padding:24px; color:#6b7280; }
+
+/* Toolbar */
+.toolbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0 14px; }
+.toolbar .left .muted{ margin:2px 0 0; color:#6b7280; font-size:13px; }
+.toolbar .right{ display:flex; gap:10px; align-items:center; }
+.search{ padding:10px 12px; border:1px solid var(--border); border-radius:10px; min-width:260px; }
+.search:focus{ outline:none; border-color:#003a8c; box-shadow:0 0 0 2px rgba(0,58,140,.18); }
+
+/* Badges de status */
+.badge{ padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; }
+.badge.Ativo{ background:#e8f7ee; color:#067647; }
+.badge.Vencido{ background:#fff4e6; color:#a45507; }
+.badge.Cancelado{ background:#fde8ea; color:#9c1c28; }
+
+/* Modal */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.25);
+  display:grid; place-items:center; z-index:1000;
+}
+.modal-card{
+  width:min(720px, 92vw);
+  background:#fff; border:1px solid var(--border); border-radius:14px;
+  box-shadow:0 20px 80px rgba(0,0,0,.25);
+}
+.modal-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; border-bottom:1px solid var(--border);
+}
+.modal-body{ padding:16px; }
+
+/* Form grid */
+.form.grid{ display:grid; gap:12px; }
+.grid-1{ grid-template-columns: 1fr; }
+.grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.grid-3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
+.form label{ display:block; font-size:13px; color:#374151; margin-bottom:4px; }
+.form input, .form select{
+  width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#fff;
+}
+.form input:focus, .form select:focus{ outline:none; border-color:#003a8c; box-shadow:0 0 0 2px rgba(0,58,140,.18); }
+.form-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+
+/* Ações */
+.actions{ display:flex; gap:8px; }
+
+/* Botões reutilizados */
+.btn-ghost{ border:1px solid var(--border); background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; }
+.btn-ghost:hover{ background:#f8fafc; }
+.btn-ghost.danger{ border-color:#fecaca; color:#991b1b; }
+.btn-ghost.danger:hover{ background:#fef2f2; }
+.btn-primary{ background:#003a8c; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:700; }
+.btn-primary:hover{ background:#012f6d; }
+
+@media (max-width: 900px){
+  .grid-2, .grid-3{ grid-template-columns: 1fr; }
+  .search{ min-width: 0; width: 100%; }
+  .toolbar{ flex-direction:column; align-items:stretch; }
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input.invalid { border-color: #dc2626; outline: none; }
+small.error { color: #dc2626; display: block; margin-top: 4px; }

@@ -1,0 +1,55 @@
+{
+  "name": "agenda_web",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-table": "^8.21.3",
+    "@testing-library/jest-dom": "^5.16.5",
+    "axios": "^0.27.2",
+    "bootstrap": "^5.3.0",
+    "jquery": "^3.7.0",
+    "moment": "^2.29.4",
+    "popper.js": "^1.16.1",
+    "react": "19.1.0",
+    "react-bootstrap": "^2.8.0",
+    "react-dom": "19.1.0",
+    "react-hook-form": "^7.63.0",
+    "react-input-mask": "^2.0.4",
+    "react-router-dom": "7.9.1",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4",
+    "zod": "^4.1.11"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.0",
+    "@testing-library/user-event": "14.6.1",
+    "@vitejs/plugin-react": "5.0.3",
+    "vite": "7.1.7"
+  }
+}
