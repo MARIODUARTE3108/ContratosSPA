@@ -9,7 +9,7 @@ export default function LoginForm() {
   const [mensagemErro, setMensagemErro] = useState('');
 
   const { control, handleSubmit, formState: { errors }, reset } = useForm({
-    defaultValues: { email: '', password: '' }
+    defaultValues: { email: '', senha: '' }
   });
 
   const onSubmit = (data) => {
@@ -63,14 +63,14 @@ export default function LoginForm() {
       <div className="form-group">
         <label htmlFor="password">Senha</label>
         <Controller
-          name="password"
+          name="senha"
           control={control}
           rules={{
             required: 'Informe sua senha',
             minLength: { value: 4, message: 'Mínimo de 4 caracteres' }
           }}
           render={({ field }) => (
-            <input id="password" type="password" placeholder="••••••••" {...field} />
+            <input id="senha" type="password" placeholder="••••••••" {...field} />
           )}
         />
         {errors.password && <p className="error-text">{errors.password.message}</p>}

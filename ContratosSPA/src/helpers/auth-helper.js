@@ -16,7 +16,7 @@ export const getAccessToken = () => {
     const raw = localStorage.getItem('USER_AUTH');
     if (!raw) return null;
     const user = JSON.parse(raw);
-    return  user.access_token ?? null;
+    return  user.token ?? null;
   } catch {
     return null;
   }

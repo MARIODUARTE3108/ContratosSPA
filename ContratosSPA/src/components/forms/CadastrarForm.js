@@ -8,7 +8,7 @@ export default function CadastrarForm() {
   const [mensagemErro, setMensagemErro] = useState('');
 
   const { control, handleSubmit, formState: { errors }, reset } = useForm({
-    defaultValues: { name: '', email: '', password: '' }
+    defaultValues: { nome: '', email: '', senha: '' }
   });
 
   const onSubmit = (data) => {
@@ -18,16 +18,16 @@ export default function CadastrarForm() {
     services.postUsuario(data)
       .then(result => {
         setMensagemSucesso(result?.message || 'Conta criada com sucesso!');
-        reset({ name: '', email: '', password: '' });
+        reset({ nome: '', email: '', senha: '' });
       })
       .catch(e => {
         const status = e?.response?.status;
         if (status === 400 && e.response?.data?.errors) {
           const errs = e.response.data.errors;
           const first =
-            errs.Name?.[0] ||
+            errs.Nome?.[0] ||
             errs.Email?.[0] ||
-            errs.Password?.[0] ||
+            errs.Senha?.[0] ||
             e.response?.data?.message;
           setMensagemErro(first || 'Verifique os campos e tente novamente.');
         } else if (status === 422) {
@@ -57,7 +57,7 @@ export default function CadastrarForm() {
       <div className="form-group">
         <label htmlFor="nome">Nome</label>
         <Controller
-          name="name"
+          name="nome"
           control={control}
           rules={{
             required: 'Informe seu nome',
@@ -89,7 +89,7 @@ export default function CadastrarForm() {
       <div className="form-group">
         <label htmlFor="senha">Senha</label>
         <Controller
-          name="password"
+          name="senha"
           control={control}
           rules={{
             required: 'Informe sua senha',

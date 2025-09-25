@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
+// ContratosPage.jsx
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import "../css/forms.css";
 import {
   useReactTable,
@@ -10,6 +11,22 @@ import {
   createColumnHelper,
 } from "@tanstack/react-table";
 
+// Services
+import { getCompany } from "../../services/companies-services";
+import { getContracts, postContract, putContract } from "../../services/contracts-services";
+
+/* ---------------- Helpers ---------------- */
+const STATUS_MAP = { Ativo: 1, Vencido: 2, Cancelado: 3 };
+const mapStatusTextToNumber = (s) => STATUS_MAP[s] ?? 1;
+const mapStatusNumberToText = (n) => (n === 1 ? "Ativo" : n === 2 ? "Vencido" : n === 3 ? "Cancelado" : String(n));
+const parseCurrencyBR = (s) => {
+  const num = Number(String(s ?? "").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(num) ? num : 0;
+};
+const fmtMoeda = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
+const fmtDataBR = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "-");
+
+/* ---------------- UI ---------------- */
 function Modal({ open, title, children, onClose }) {
   if (!open) return null;
   return (
@@ -17,9 +34,7 @@ function Modal({ open, title, children, onClose }) {
       <div className="modal-card">
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="btn-ghost" onClick={onClose}>
-            ✕
-          </button>
+          <button className="btn-ghost" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
@@ -27,12 +42,14 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
+/* ---------------- Form ---------------- */
 function ContratoForm({ initial, onSubmit, onCancel }) {
   const [form, setForm] = useState(
     initial ?? {
       id: null,
       numero: "",
-      empresa: "",
+      empresaId: null,
+      empresaNome: "",
       descricao: "",
       inicio: "",
       fim: "",
@@ -41,12 +58,16 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
     }
   );
 
+  const [empresas, setEmpresas] = useState([]);
+  const [empSearch, setEmpSearch] = useState("");
+
   useEffect(() => {
     setForm(
       initial ?? {
         id: null,
         numero: "",
-        empresa: "",
+        empresaId: null,
+        empresaNome: "",
         descricao: "",
         inicio: "",
         fim: "",
@@ -56,37 +77,93 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
     );
   }, [initial]);
 
+  // Carrega empresas para o select
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const { rows } = await getCompany({
+          search: empSearch,
+          page: 1,
+          pageSize: 100,
+          sortBy: "nome",
+          sortDir: "asc",
+        });
+        if (!cancel) {
+          setEmpresas((rows ?? []).map((e, i) => ({ id: e.id ?? i, nome: e.nome ?? "" })));
+        }
+      } catch (e) {
+        console.error("Falha ao buscar empresas (getCompany)", e);
+        if (!cancel) setEmpresas([]);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [empSearch]);
+
   const handle = (e) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   };
 
-  const salvar = (e) => {
+  const salvar = async (e) => {
     e.preventDefault();
-    if (!form.numero || !form.empresa) return alert("Preencha número e empresa.");
-    onSubmit({
-      ...form,
-      id: form.id ?? crypto.randomUUID(),
-      valor: Number(String(form.valor).replace(",", ".")) || 0,
-    });
+    if (!form.numero?.trim()) return alert("Informe o número do contrato.");
+    if (!form.empresaId) return alert("Selecione a empresa.");
+
+    const payload = {
+      id: form.id ?? null, // <- importante para editar
+      nome: form.descricao?.trim() || form.numero?.trim(),
+      numero: form.numero?.trim(),
+      descricao: form.descricao?.trim() || "",
+      valor: parseCurrencyBR(form.valor),
+      empresaId: Number(form.empresaId),
+      dataInicio: form.inicio ? String(form.inicio).slice(0, 10) : null,
+      dataFim: form.fim ? String(form.fim).slice(0, 10) : null,
+      status: mapStatusTextToNumber(form.status),
+    };
+
+    await onSubmit(payload);
   };
 
   return (
-    <form onSubmit={salvar} className="form grid">
+    <form onSubmit={salvar} className="form grid" noValidate>
       <div className="grid-2">
         <div>
           <label>Número</label>
-          <input name="numero" value={form.numero} onChange={handle} />
+          <input name="numero" value={form.numero} onChange={handle} placeholder="CT-0001" />
         </div>
+
         <div>
           <label>Empresa</label>
-          <input name="empresa" value={form.empresa} onChange={handle} />
+          <select
+            name="empresaId"
+            value={form.empresaId ?? ""}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : null;
+              const sel = empresas.find((x) => x.id === id);
+              setForm((f) => ({ ...f, empresaId: id, empresaNome: sel?.nome ?? "" }));
+            }}
+          >
+            <option value="">Selecione...</option>
+            {empresas.map((e) => (
+              <option key={e.id} value={e.id}>{e.nome}</option>
+            ))}
+          </select>
+          <small className="muted">
+            Precisa filtrar?{" "}
+            <input
+              className="inline-input"
+              placeholder="buscar empresa..."
+              value={empSearch}
+              onChange={(ev) => setEmpSearch(ev.target.value)}
+            />
+          </small>
         </div>
       </div>
 
       <div className="grid-1">
         <label>Descrição</label>
-        <input name="descricao" value={form.descricao} onChange={handle} />
+        <input name="descricao" value={form.descricao} onChange={handle} placeholder="Descrição do contrato" />
       </div>
 
       <div className="grid-3">
@@ -111,79 +188,51 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
       <div className="grid-2">
         <div>
           <label>Valor (R$)</label>
-          <input name="valor" value={form.valor} onChange={handle} placeholder="10000,00" />
+          <input name="valor" value={form.valor} onChange={handle} placeholder="10.000,00" />
         </div>
       </div>
 
       <div className="form-actions">
-        <button type="button" className="btn-ghost" onClick={onCancel}>
-          Cancelar
-        </button>
-        <button type="submit" className="btn-primary">
-          Salvar
-        </button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>Cancelar</button>
+        <button type="submit" className="btn-primary">Salvar</button>
       </div>
     </form>
   );
 }
 
-export default function InserirImagemForm() {
-  const base = [
-    { numero: "CT-0001", empresa: "Alpha S.A.", descricao: "Manutenção FPSO", inicio: "2025-01-10", fim: "2025-12-31", status: "Ativo", valor: 1500000 },
-    { numero: "CT-0002", empresa: "Beta Ltda.", descricao: "Fornecimento de peças", inicio: "2024-02-01", fim: "2024-11-30", status: "Vencido", valor: 320000 },
-    { numero: "CT-0003", empresa: "Gamma Inc.", descricao: "Serviços elétricos", inicio: "2025-03-05", fim: "2026-03-04", status: "Ativo", valor: 890000 },
-    { numero: "CT-0004", empresa: "Delta Oil", descricao: "Consultoria", inicio: "2023-08-01", fim: "2024-07-31", status: "Cancelado", valor: 0 },
-  ];
-  const seed = Array.from({ length: 26 }).flatMap((_, i) =>
-    base.map((b, j) => ({
-      id: crypto.randomUUID(),
-      ...b,
-      numero: `${b.numero}-${String(i + 1).padStart(2, "0")}`,
-    }))
-  );
-
-  const [data, setData] = useState(seed);
+/* ---------------- Página principal ---------------- */
+export default function ContratosPage() {
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
 
   const [globalFilter, setGlobalFilter] = useState("");
-  const [sorting, setSorting] = useState([]);
+  const [sorting, setSorting] = useState([]); // [{ id: 'numero', desc: false }]
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [errMsg, setErrMsg] = useState("");
+
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const { pageIndex, pageSize } = pagination;
+
+  // debounce de busca
+  const [debounced, setDebounced] = useState(globalFilter);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(globalFilter), 400);
+    return () => clearTimeout(id);
+  }, [globalFilter]);
 
   const columnHelper = createColumnHelper();
-
-  const fmtMoeda = (n) =>
-    (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
-
-  const fmtData = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "-");
-
   const columns = useMemo(
     () => [
-      columnHelper.accessor("numero", {
-        header: () => "Número",
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("empresa", {
-        header: () => "Empresa",
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("descricao", {
-        header: () => "Descrição",
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("inicio", {
-        header: () => "Início",
-        cell: (info) => fmtData(info.getValue()),
-      }),
-      columnHelper.accessor("fim", {
-        header: () => "Fim",
-        cell: (info) => fmtData(info.getValue()),
-      }),
+      columnHelper.accessor("numero", { header: () => "Número", cell: (info) => info.getValue() }),
+      columnHelper.accessor("empresaNome", { header: () => "Empresa", cell: (info) => info.getValue() }),
+      columnHelper.accessor("descricao", { header: () => "Descrição", cell: (info) => info.getValue() }),
+      columnHelper.accessor("inicio", { header: () => "Início", cell: (info) => fmtDataBR(info.getValue()) }),
+      columnHelper.accessor("fim", { header: () => "Fim", cell: (info) => fmtDataBR(info.getValue()) }),
       columnHelper.accessor("status", {
         header: () => "Status",
-        cell: (info) => {
-          const s = info.getValue();
-          return <span className={`badge ${s}`}>{s}</span>;
-        },
+        cell: (info) => <span className={`badge ${info.getValue()}`}>{info.getValue()}</span>,
       }),
       columnHelper.accessor("valor", {
         header: () => "Valor",
@@ -203,16 +252,6 @@ export default function InserirImagemForm() {
             >
               Editar
             </button>
-            <button
-              className="btn-ghost danger"
-              onClick={() => {
-                if (window.confirm("Excluir este contrato?")) {
-                  setData((d) => d.filter((c) => c.id !== row.original.id));
-                }
-              }}
-            >
-              Excluir
-            </button>
           </div>
         ),
       }),
@@ -220,77 +259,138 @@ export default function InserirImagemForm() {
     []
   );
 
+  const pageCount = Math.max(1, Math.ceil((total || 0) / (pageSize || 10)));
+
   const table = useReactTable({
-    data,
+    data: rows,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(), 
-    initialState: {
-      pagination: { pageSize: 10 }, 
-    },
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    manualSorting: true,
+    manualFiltering: true,
+    pageCount,
+    getRowId: (row, index) => row.id ?? row.numero ?? String(index),
   });
 
-  useEffect(() => {
-    table.setPageSize(10);
-  }, [table]);
+  // Carrega contratos com o SEU service
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErrMsg("");
 
-  const abrirNovo = () => {
-    setEditRow(null);
-    setModalOpen(true);
-  };
+    const sortBy = sorting[0]?.id ?? "numero";
+    const sortDir = sorting[0]?.desc ? "desc" : "asc";
 
-  const salvarContrato = (contrato) => {
-    setData((d) => {
-      const idx = d.findIndex((c) => c.id === contrato.id);
-      if (idx >= 0) {
-        const clone = [...d];
-        clone[idx] = contrato;
-        return clone;
+    try {
+      const { rows: apiRows, total } = await getContracts({
+        page: pageIndex + 1,
+        pageSize,
+        search: debounced.trim(),
+        sortBy,
+        sortDir,
+      });
+
+      const mapped = (apiRows ?? []).map((u, i) => ({
+        id: u.id ?? i,
+        numero: u.numero ?? "",
+        empresaId: u.supplierId ?? u.empresaId ?? u.supplier?.id ?? null,
+        empresaNome: u.supplierNome ?? u.empresaNome ?? u.supplier?.nome ?? "",
+        descricao: u.descricao ?? "",
+        inicio: u.dataInicio ?? u.inicio ?? null,
+        fim: u.dataFim ?? u.fim ?? null,
+        status: mapStatusNumberToText(u.status),
+        valor: Number(u.valor ?? 0),
+      }));
+
+      setRows(mapped);
+      setTotal(Number(total) || 0);
+    } catch (e) {
+      console.error(e);
+      setErrMsg(e?.response?.data?.detail || "Falha ao buscar contratos.");
+      setRows([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [debounced, pageIndex, pageSize, sorting]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const abrirNovo = () => { setEditRow(null); setModalOpen(true); };
+
+  // Decide POST (criar) ou PUT (editar)
+  const salvarContrato = async (payload) => {
+    try {
+      if (payload?.id) {
+        const { id, ...data } = payload;
+        await putContract(id, data);   // EDITAR
+      } else {
+        await postContract(payload);   // CRIAR
       }
-      return [contrato, ...d];
-    });
-    setModalOpen(false);
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+      await load();
+      setModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert(e?.response?.data?.detail || "Falha ao salvar contrato.");
+    }
   };
+
+  const onHeaderClick = (header) => {
+    const canSort = header.column.getCanSort?.();
+    if (canSort) header.column.toggleSorting();
+  };
+
+  const goPrev = () => setPagination((p) => ({ ...p, pageIndex: Math.max(0, p.pageIndex - 1) }));
+  const goNext = () =>
+    setPagination((p) => {
+      const pc = Math.max(1, Math.ceil(total / p.pageSize));
+      return { ...p, pageIndex: Math.min(pc - 1, p.pageIndex + 1) };
+    });
 
   return (
     <div className="card">
       <div className="card-head toolbar">
         <div className="left">
           <h3 className="card-title">Contratos</h3>
-          <p className="muted">Ordene clicando nos cabeçalhos • Pesquise por qualquer campo</p>
+          <p className="muted">Ordene nos cabeçalhos • Busque por nº, empresa, descrição…</p>
         </div>
         <div className="right">
           <input
             className="search"
-            placeholder="Buscar (nº, empresa, status...)"
+            placeholder="Buscar (nº, empresa, descrição...)"
             value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
+            onChange={(e) => {
+              setPagination((p) => ({ ...p, pageIndex: 0 }));
+              setGlobalFilter(e.target.value);
+            }}
           />
-          <button className="btn-primary" onClick={abrirNovo}>
-            Novo Contrato
-          </button>
+          <button className="btn-primary" onClick={abrirNovo}>Novo Contrato</button>
         </div>
       </div>
 
-      <div className="dt-wrapper">
+      {errMsg && <div className="alert error">{errMsg}</div>}
+
+      <div className={`dt-wrapper ${loading ? "loading" : ""}`}>
         <table className="dt-table">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => {
-                  const sortable = header.column.getCanSort();
-                  const dir = header.column.getIsSorted(); 
+                  const dir = header.column.getIsSorted?.();
+                  const sortable = header.column.getCanSort?.();
                   return (
                     <th
                       key={header.id}
-                      onClick={sortable ? header.column.getToggleSortingHandler() : undefined}
+                      onClick={() => onHeaderClick(header)}
                       className={sortable ? "sortable" : undefined}
-                      title={sortable ? "Clique para ordenar" : ""}
+                      role={sortable ? "button" : undefined}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {sortable && (
@@ -305,55 +405,44 @@ export default function InserirImagemForm() {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                ))}
-              </tr>
-            ))}
-            {table.getRowModel().rows.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="empty">
-                  Nenhum registro encontrado.
+            {!loading && rows.map((row) => (
+              <tr key={row.id ?? row.numero}>
+                <td>{row.numero}</td>
+                <td>{row.empresaNome}</td>
+                <td>{row.descricao}</td>
+                <td>{fmtDataBR(row.inicio)}</td>
+                <td>{fmtDataBR(row.fim)}</td>
+                <td><span className={`badge ${row.status}`}>{row.status}</span></td>
+                <td>{fmtMoeda(row.valor)}</td>
+                <td>
+                  <div className="actions">
+                    <button className="btn-ghost" onClick={() => { setEditRow(row); setModalOpen(true); }}>
+                      Editar
+                    </button>
+                  </div>
                 </td>
               </tr>
+            ))}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan={columns.length} className="empty">Nenhum registro encontrado.</td></tr>
+            )}
+            {loading && (
+              <tr><td colSpan={columns.length} className="loading-row">Carregando…</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <div className="pagination">
-        <button
-          className="btn-ghost"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          ← Anterior
-        </button>
-
-        <span>
-          Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount() || 1}
-        </span>
-
-        <button
-          className="btn-ghost"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Próxima →
-        </button>
-
+        <button className="btn-ghost" onClick={goPrev} disabled={loading || pageIndex === 0}>← Anterior</button>
+        <span> Página {pageIndex + 1} de {pageCount} </span>
+        <button className="btn-ghost" onClick={goNext} disabled={loading || pageIndex + 1 >= pageCount}>Próxima →</button>
         <select
           className="page-size"
-          value={table.getState().pagination.pageSize}
-          onChange={(e) => table.setPageSize(Number(e.target.value))}
+          value={pageSize}
+          onChange={(e) => setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })}
         >
-          {[10, 20, 50].map((s) => (
-            <option key={s} value={s}>
-              {s} / página
-            </option>
-          ))}
+          {[10, 20, 50].map((s) => (<option key={s} value={s}>{s} / página</option>))}
         </select>
       </div>
 
@@ -362,7 +451,21 @@ export default function InserirImagemForm() {
         title={editRow ? "Editar Contrato" : "Novo Contrato"}
         onClose={() => setModalOpen(false)}
       >
-        <ContratoForm initial={editRow} onSubmit={salvarContrato} onCancel={() => setModalOpen(false)} />
+        <ContratoForm
+          initial={editRow ? {
+            id: editRow.id ?? null,
+            numero: editRow.numero ?? "",
+            empresaId: editRow.empresaId ?? null,
+            empresaNome: editRow.empresaNome ?? "",
+            descricao: editRow.descricao ?? "",
+            inicio: editRow.inicio ?? "",
+            fim: editRow.fim ?? "",
+            status: editRow.status ?? "Ativo",
+            valor: (editRow.valor ?? 0).toString().replace(".", ","),
+          } : null}
+          onSubmit={salvarContrato}
+          onCancel={() => setModalOpen(false)}
+        />
       </Modal>
     </div>
   );

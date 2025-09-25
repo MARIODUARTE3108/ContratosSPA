@@ -6,7 +6,7 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
- import { getUsuario } from "../../services/account-services";
+ import { getUsuario } from "../../services/users-services";
 
 export default function Usuarios() {
   const columnHelper = createColumnHelper();
