@@ -1,4 +1,4 @@
-// ContratosPage.jsx
+// ContratosPage.jsx — com busca/ordenação locais (fuzzy) + paginação server-side
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import "../css/forms.css";
 import {
@@ -10,28 +10,55 @@ import {
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+import { rankItem } from "@tanstack/match-sorter-utils";
 
 // Services
 import { getCompany } from "../../services/companies-services";
 import { getContracts, postContract, putContract } from "../../services/contracts-services";
 
-/* ---------------- Helpers ---------------- */
+/* ===================== Helpers ===================== */
 const STATUS_MAP = { Ativo: 1, Vencido: 2, Cancelado: 3 };
 const mapStatusTextToNumber = (s) => STATUS_MAP[s] ?? 1;
-const mapStatusNumberToText = (n) => (n === 1 ? "Ativo" : n === 2 ? "Vencido" : n === 3 ? "Cancelado" : String(n));
+const mapStatusNumberToText = (n) =>
+  n === 1 ? "Ativo" : n === 2 ? "Vencido" : n === 3 ? "Cancelado" : String(n);
+
 const parseCurrencyBR = (s) => {
   const num = Number(String(s ?? "").replace(/\./g, "").replace(",", "."));
   return Number.isFinite(num) ? num : 0;
 };
-const fmtMoeda = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
+const fmtMoeda = (n) =>
+  (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 const fmtDataBR = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "-");
+const toInputDate = (d) => (d ? String(d).slice(0, 10) : "");
 
-/* ---------------- UI ---------------- */
+/* ===================== Filtro fuzzy (local) ===================== */
+const fuzzyFilter = (row, columnId, value, addMeta) => {
+  const item = String(row.getValue(columnId) ?? "");
+  const v = String(value ?? "");
+  const rank = rankItem(item, v);
+  addMeta?.({ itemRank: rank });
+  return rank.passed;
+};
+
+/* ===================== UI: Modal ===================== */
 function Modal({ open, title, children, onClose }) {
+  useEffect(() => {
+    if (!open) return;
+    const onEsc = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onEsc);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onEsc);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
+
   return (
-    <div className="modal-backdrop">
-      <div className="modal-card">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
           <button className="btn-ghost" onClick={onClose}>✕</button>
@@ -42,7 +69,7 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
-/* ---------------- Form ---------------- */
+/* ===================== Formulário ===================== */
 function ContratoForm({ initial, onSubmit, onCancel }) {
   const [form, setForm] = useState(
     initial ?? {
@@ -77,7 +104,7 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
     );
   }, [initial]);
 
-  // Carrega empresas para o select
+  // Carrega empresas (com filtro server-side)
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -111,7 +138,7 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
     if (!form.empresaId) return alert("Selecione a empresa.");
 
     const payload = {
-      id: form.id ?? null, // <- importante para editar
+      id: form.id ?? null,
       nome: form.descricao?.trim() || form.numero?.trim(),
       numero: form.numero?.trim(),
       descricao: form.descricao?.trim() || "",
@@ -130,7 +157,7 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
       <div className="grid-2">
         <div>
           <label>Número</label>
-          <input name="numero" value={form.numero} onChange={handle} placeholder="CT-0001" />
+          <input name="numero" value={form.numero ?? ""} onChange={handle} placeholder="CT-0001" />
         </div>
 
         <div>
@@ -163,21 +190,21 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
 
       <div className="grid-1">
         <label>Descrição</label>
-        <input name="descricao" value={form.descricao} onChange={handle} placeholder="Descrição do contrato" />
+        <input name="descricao" value={form.descricao ?? ""} onChange={handle} placeholder="Descrição do contrato" />
       </div>
 
       <div className="grid-3">
         <div>
           <label>Início</label>
-          <input type="date" name="inicio" value={form.inicio} onChange={handle} />
+          <input type="date" name="inicio" value={form.inicio ?? ""} onChange={handle} />
         </div>
         <div>
           <label>Fim</label>
-          <input type="date" name="fim" value={form.fim} onChange={handle} />
+          <input type="date" name="fim" value={form.fim ?? ""} onChange={handle} />
         </div>
         <div>
           <label>Status</label>
-          <select name="status" value={form.status} onChange={handle}>
+          <select name="status" value={form.status ?? "Ativo"} onChange={handle}>
             <option>Ativo</option>
             <option>Vencido</option>
             <option>Cancelado</option>
@@ -188,7 +215,7 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
       <div className="grid-2">
         <div>
           <label>Valor (R$)</label>
-          <input name="valor" value={form.valor} onChange={handle} placeholder="10.000,00" />
+          <input name="valor" value={form.valor ?? ""} onChange={handle} placeholder="10.000,00" />
         </div>
       </div>
 
@@ -200,13 +227,13 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
   );
 }
 
-/* ---------------- Página principal ---------------- */
+/* ===================== Página Principal ===================== */
 export default function ContratosPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
 
   const [globalFilter, setGlobalFilter] = useState("");
-  const [sorting, setSorting] = useState([]); // [{ id: 'numero', desc: false }]
+  const [sorting, setSorting] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -215,29 +242,22 @@ export default function ContratosPage() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const { pageIndex, pageSize } = pagination;
 
-  // debounce de busca
-  const [debounced, setDebounced] = useState(globalFilter);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(globalFilter), 400);
-    return () => clearTimeout(id);
-  }, [globalFilter]);
+  // Híbrido: paginação no servidor; busca/ordenação locais sobre as linhas carregadas
+  // Se quiser buscar/ordenar "o sistema todo", troque para carregar tudo (sem manualPagination)
 
   const columnHelper = createColumnHelper();
   const columns = useMemo(
     () => [
-      columnHelper.accessor("numero", { header: () => "Número", cell: (info) => info.getValue() }),
-      columnHelper.accessor("empresaNome", { header: () => "Empresa", cell: (info) => info.getValue() }),
-      columnHelper.accessor("descricao", { header: () => "Descrição", cell: (info) => info.getValue() }),
+      columnHelper.accessor("numero", { header: () => "Número", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
+      columnHelper.accessor("empresaNome", { header: () => "Empresa", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
+      columnHelper.accessor("descricao", { header: () => "Descrição", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
       columnHelper.accessor("inicio", { header: () => "Início", cell: (info) => fmtDataBR(info.getValue()) }),
       columnHelper.accessor("fim", { header: () => "Fim", cell: (info) => fmtDataBR(info.getValue()) }),
       columnHelper.accessor("status", {
         header: () => "Status",
         cell: (info) => <span className={`badge ${info.getValue()}`}>{info.getValue()}</span>,
       }),
-      columnHelper.accessor("valor", {
-        header: () => "Valor",
-        cell: (info) => fmtMoeda(info.getValue()),
-      }),
+      columnHelper.accessor("valor", { header: () => "Valor", cell: (info) => fmtMoeda(info.getValue()) }),
       columnHelper.display({
         id: "actions",
         header: () => "Ações",
@@ -265,35 +285,38 @@ export default function ContratosPage() {
     data: rows,
     columns,
     state: { sorting, globalFilter, pagination },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      // como sort é local, não precisamos recarregar; mas resetamos página
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+    },
+    onGlobalFilterChange: (value) => {
+      setGlobalFilter(value);
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+    },
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    manualPagination: true,
-    manualSorting: true,
-    manualFiltering: true,
-    pageCount,
+    // 🔽 comportamento híbrido
+    manualPagination: true,   // paginação vem do servidor
+    // ordenação e filtro **locais**
+    filterFns: { fuzzy: fuzzyFilter },
+    globalFilterFn: "fuzzy",
     getRowId: (row, index) => row.id ?? row.numero ?? String(index),
   });
 
-  // Carrega contratos com o SEU service
+  // Carrega contratos (apenas paginação no servidor)
   const load = useCallback(async () => {
     setLoading(true);
     setErrMsg("");
-
-    const sortBy = sorting[0]?.id ?? "numero";
-    const sortDir = sorting[0]?.desc ? "desc" : "asc";
-
     try {
       const { rows: apiRows, total } = await getContracts({
         page: pageIndex + 1,
         pageSize,
-        search: debounced.trim(),
-        sortBy,
-        sortDir,
+        // não enviamos sort/search para o backend; são locais
       });
 
       const mapped = (apiRows ?? []).map((u, i) => ({
@@ -312,33 +335,33 @@ export default function ContratosPage() {
       setTotal(Number(total) || 0);
     } catch (e) {
       console.error(e);
-      setErrMsg(e?.response?.data?.detail || "Falha ao buscar contratos.");
+      setErrMsg(e?.response?.data?.message || e?.response?.data?.detail || "Falha ao buscar contratos.");
       setRows([]);
       setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [debounced, pageIndex, pageSize, sorting]);
+  }, [pageIndex, pageSize]);
 
   useEffect(() => { load(); }, [load]);
 
   const abrirNovo = () => { setEditRow(null); setModalOpen(true); };
 
-  // Decide POST (criar) ou PUT (editar)
+  // POST (criar) ou PUT (editar)
   const salvarContrato = async (payload) => {
     try {
       if (payload?.id) {
         const { id, ...data } = payload;
-        await putContract(id, data);   // EDITAR
+        await putContract(id, data);
       } else {
-        await postContract(payload);   // CRIAR
+        await postContract(payload);
       }
       setPagination((p) => ({ ...p, pageIndex: 0 }));
       await load();
       setModalOpen(false);
     } catch (e) {
       console.error(e);
-      alert(e?.response?.data?.detail || "Falha ao salvar contrato.");
+      alert(e?.response?.data?.detail || e?.response?.data?.message || "Falha ao salvar contrato.");
     }
   };
 
@@ -366,10 +389,7 @@ export default function ContratosPage() {
             className="search"
             placeholder="Buscar (nº, empresa, descrição...)"
             value={globalFilter ?? ""}
-            onChange={(e) => {
-              setPagination((p) => ({ ...p, pageIndex: 0 }));
-              setGlobalFilter(e.target.value);
-            }}
+            onChange={(e) => setGlobalFilter(e.target.value)}
           />
           <button className="btn-primary" onClick={abrirNovo}>Novo Contrato</button>
         </div>
@@ -405,25 +425,14 @@ export default function ContratosPage() {
             ))}
           </thead>
           <tbody>
-            {!loading && rows.map((row) => (
-              <tr key={row.id ?? row.numero}>
-                <td>{row.numero}</td>
-                <td>{row.empresaNome}</td>
-                <td>{row.descricao}</td>
-                <td>{fmtDataBR(row.inicio)}</td>
-                <td>{fmtDataBR(row.fim)}</td>
-                <td><span className={`badge ${row.status}`}>{row.status}</span></td>
-                <td>{fmtMoeda(row.valor)}</td>
-                <td>
-                  <div className="actions">
-                    <button className="btn-ghost" onClick={() => { setEditRow(row); setModalOpen(true); }}>
-                      Editar
-                    </button>
-                  </div>
-                </td>
+            {!loading && table.getRowModel().rows.map((r) => (
+              <tr key={r.id}>
+                {r.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                ))}
               </tr>
             ))}
-            {!loading && rows.length === 0 && (
+            {!loading && table.getRowModel().rows.length === 0 && (
               <tr><td colSpan={columns.length} className="empty">Nenhum registro encontrado.</td></tr>
             )}
             {loading && (
@@ -452,16 +461,17 @@ export default function ContratosPage() {
         onClose={() => setModalOpen(false)}
       >
         <ContratoForm
+          key={editRow ? `edit-${editRow.id}` : "new"}
           initial={editRow ? {
             id: editRow.id ?? null,
             numero: editRow.numero ?? "",
             empresaId: editRow.empresaId ?? null,
             empresaNome: editRow.empresaNome ?? "",
             descricao: editRow.descricao ?? "",
-            inicio: editRow.inicio ?? "",
-            fim: editRow.fim ?? "",
+            inicio: toInputDate(editRow.inicio),
+            fim: toInputDate(editRow.fim),
             status: editRow.status ?? "Ativo",
-            valor: (editRow.valor ?? 0).toString().replace(".", ","),
+            valor: (editRow.valor ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
           } : null}
           onSubmit={salvarContrato}
           onCancel={() => setModalOpen(false)}

@@ -3,13 +3,17 @@ import "../css/forms.css";
 import {
   useReactTable,
   getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
   flexRender,
   createColumnHelper,
 } from "@tanstack/react-table";
+import { rankItem } from "@tanstack/match-sorter-utils";
 
 import { postCompany, getCompany } from "../../services/companies-services";
 
-/* Helpers */
+/* ================= Helpers ================= */
 const onlyDigits = (s = "") => s.replace(/\D/g, "");
 const maskCNPJ = (v = "") => {
   const d = onlyDigits(v).slice(0, 14);
@@ -33,7 +37,7 @@ const maskPhone = (v = "") => {
   );
 };
 
-/* Debounce */
+/* ================ Debounce ================ */
 function useDebouncedValue(value, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -43,7 +47,7 @@ function useDebouncedValue(value, delay = 400) {
   return debounced;
 }
 
-/* Modal */
+/* ================ Modal ================ */
 function Modal({ open, title, children, onClose }) {
   if (!open) return null;
   return (
@@ -59,7 +63,7 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
-/* Validações */
+/* ================ Validações ================ */
 const isValidEmail = (email = "") =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email).trim());
 
@@ -76,6 +80,15 @@ const isValidCNPJ = (cnpjMasked = "") => {
   for (let i = tamanho; i >= 1; i--) { soma += parseInt(numeros.charAt(tamanho - i), 10) * pos--; if (pos < 2) pos = 9; }
   resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
   return resultado === parseInt(digitos.charAt(1), 10);
+};
+
+/* ================ Filtro fuzzy local ================ */
+const fuzzyFilter = (row, columnId, value, addMeta) => {
+  const item = String(row.getValue(columnId) ?? "");
+  const v = String(value ?? "");
+  const rank = rankItem(item, v);
+  addMeta?.({ itemRank: rank });
+  return rank.passed;
 };
 
 function EmpresaForm({ onSubmit, onCancel }) {
@@ -154,12 +167,12 @@ function EmpresaForm({ onSubmit, onCancel }) {
   );
 }
 
-/* ===== Página principal com busca na API ===== */
+/* ===== Página principal com paginação server-side + busca/ordenação locais ===== */
 export default function Empresas() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [globalFilter, setGlobalFilter] = useState("");
-  const [sorting, setSorting] = useState([]);  
+  const [sorting, setSorting] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
@@ -172,10 +185,10 @@ export default function Empresas() {
   const columnHelper = createColumnHelper();
   const columns = useMemo(
     () => [
-      columnHelper.accessor("nome", { header: () => "Nome", cell: (info) => info.getValue() }),
-      columnHelper.accessor("cnpj", { header: () => "CNPJ", cell: (info) => info.getValue() }),
-      columnHelper.accessor("email", { header: () => "E-mail", cell: (info) => info.getValue() }),
-      columnHelper.accessor("telefone", { header: () => "Telefone", cell: (info) => info.getValue() }),
+      columnHelper.accessor("nome", { header: () => "Nome", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
+      columnHelper.accessor("cnpj", { header: () => "CNPJ", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
+      columnHelper.accessor("email", { header: () => "E-mail", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
+      columnHelper.accessor("telefone", { header: () => "Telefone", cell: (info) => info.getValue(), filterFn: "fuzzy" }),
     ],
     []
   );
@@ -185,38 +198,72 @@ export default function Empresas() {
   const table = useReactTable({
     data: rows,
     columns,
-    state: {
-      sorting,
-      globalFilter,
-      pagination,        
+    state: { sorting, globalFilter, pagination },
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setSorting(next);
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
     },
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination, 
-    manualPagination: true,
-    manualSorting: true,
-    manualFiltering: true,
-    pageCount,                    
+    onGlobalFilterChange: (value) => {
+      setGlobalFilter(value);
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+    },
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true, // só a paginação é no servidor
+    filterFns: { fuzzy: fuzzyFilter },
+    globalFilterFn: "fuzzy",
     getRowId: (row, index) => row.id ?? row.cnpj ?? row.email ?? String(index),
   });
 
-useEffect(() => {
-  const load = async () => {
-    setLoading(true);
-    setErrMsg("");
+  // Carrega apenas a página (não envia sort/search ao backend; são locais)
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setErrMsg("");
+      try {
+        const resp = await getCompany({
+          page: pageIndex + 1,
+          pageSize,
+          // não enviamos search/sort — busca/ordenação são locais
+        });
 
-    const sortBy = sorting[0]?.id ?? "nome";
-    const sortDir = sorting[0]?.desc ? "desc" : "asc";
+        const mapped = (resp.rows ?? []).map((x) => ({
+          id: x.id,
+          nome: x.nome,
+          cnpj: maskCNPJ(x.cnpj),
+          email: x.email,
+          telefone: maskPhone(x.telefone),
+        }));
 
+        setRows(mapped);
+        setTotal(Number(resp.total) || mapped.length);
+      } catch (e) {
+        console.error(e);
+        setErrMsg(e?.response?.data?.detail || "Falha ao buscar empresas.");
+        setRows([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+    // depende só de paginação, não de globalFilter/sorting (que são locais)
+  }, [pageIndex, pageSize]);
+
+  const abrirNovo = () => setModalOpen(true);
+
+  const salvarEmpresa = async (payload) => {
     try {
-      const resp = await getCompany({
-        page: pageIndex + 1,   
-        pageSize,
-        search: debouncedSearch.trim(),
-        sortBy,
-        sortDir,
-      });
-
+      await postCompany(payload);
+      // volta pra primeira página e limpa busca
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+      setGlobalFilter("");
+      // recarrega a página atual
+      const resp = await getCompany({ page: 1, pageSize });
       const mapped = (resp.rows ?? []).map((x) => ({
         id: x.id,
         nome: x.nome,
@@ -224,31 +271,8 @@ useEffect(() => {
         email: x.email,
         telefone: maskPhone(x.telefone),
       }));
-
       setRows(mapped);
       setTotal(Number(resp.total) || mapped.length);
-    } catch (e) {
-      console.error(e);
-      setErrMsg(e?.response?.data?.detail || "Falha ao buscar empresas.");
-      setRows([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  load();
-}, [debouncedSearch, pageIndex, pageSize, sorting]);
-
-
-  const abrirNovo = () => setModalOpen(true);
-
-  const salvarEmpresa = async (payload) => {
-    try {
-      await postCompany(payload);
-      setPagination((p) => ({ ...p, pageIndex: 0 }));
-      setGlobalFilter("");
-    window.location.reload(); // recarrega a página inteira
     } catch (e) {
       console.error(e);
       alert(e?.response?.data?.detail || "Falha ao salvar empresa.");
@@ -257,15 +281,12 @@ useEffect(() => {
     }
   };
 
-  const goPrev = () =>
-    setPagination((p) => ({ ...p, pageIndex: Math.max(0, p.pageIndex - 1) }));
-
+  const goPrev = () => setPagination((p) => ({ ...p, pageIndex: Math.max(0, p.pageIndex - 1) }));
   const goNext = () =>
     setPagination((p) => {
       const pc = Math.max(1, Math.ceil(total / p.pageSize));
       return { ...p, pageIndex: Math.min(pc - 1, p.pageIndex + 1) };
     });
-
   const changePageSize = (s) => setPagination({ pageIndex: 0, pageSize: s });
 
   const onHeaderClick = (header) => {
@@ -285,10 +306,7 @@ useEffect(() => {
             className="search"
             placeholder="Buscar (nome, CNPJ, e-mail, telefone)"
             value={globalFilter ?? ""}
-            onChange={(e) => {
-              setPagination((p) => ({ ...p, pageIndex: 0 }));
-              setGlobalFilter(e.target.value);
-            }}
+            onChange={(e) => setGlobalFilter(e.target.value)}
           />
           <button className="btn-primary" onClick={abrirNovo}>Nova Empresa</button>
         </div>
@@ -303,7 +321,7 @@ useEffect(() => {
               <tr key={hg.id}>
                 {hg.headers.map((header) => {
                   const dir = header.column.getIsSorted?.();
-                  const sortable = true;
+                  const sortable = header.column.getCanSort?.();
                   return (
                     <th
                       key={header.id}
@@ -312,9 +330,11 @@ useEffect(() => {
                       role={sortable ? "button" : undefined}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                      <span className="sort-indicator">
-                        {dir === "asc" ? " ↑" : dir === "desc" ? " ↓" : " ↕"}
-                      </span>
+                      {sortable && (
+                        <span className="sort-indicator">
+                          {dir === "asc" ? " ↑" : dir === "desc" ? " ↓" : " ↕"}
+                        </span>
+                      )}
                     </th>
                   );
                 })}
@@ -322,15 +342,14 @@ useEffect(() => {
             ))}
           </thead>
           <tbody>
-            {!loading && rows.map((row) => (
-              <tr key={row.id || row.cnpj || row.email}>
-                <td>{row.nome}</td>
-                <td>{row.cnpj}</td>
-                <td>{row.email}</td>
-                <td>{row.telefone}</td>
+            {!loading && table.getRowModel().rows.map((r) => (
+              <tr key={r.id}>
+                {r.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                ))}
               </tr>
             ))}
-            {!loading && rows.length === 0 && (
+            {!loading && table.getRowModel().rows.length === 0 && (
               <tr><td colSpan={columns.length} className="empty">Nenhum registro encontrado.</td></tr>
             )}
             {loading && (

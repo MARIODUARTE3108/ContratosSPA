@@ -2,7 +2,7 @@
 .dt-wrapper{ width:100%; overflow:auto; }
 .dt-table{ width:100%; border-collapse: collapse; background:#fff; }
 .dt-table th, .dt-table td{ padding:12px 10px; border-bottom:1px solid var(--border); text-align:left; }
-.dt-table thead th{ background:#f8fafc; font-weight:800; color:#0f172a; position:sticky; top:0; }
+.dt-table thead th{ background:#f8fafc; font-weight:800; color:#0f172a; position:sticky; top:0; z-index:1; }
 .dt-table tr:hover td{ background:#fafbff; }
 .dt-table .sortable{ cursor:pointer; user-select:none; }
 .dt-table .sort-indicator{ opacity:.6; margin-left:6px; }
@@ -23,19 +23,40 @@
 
 /* Modal */
 .modal-backdrop{
-  position:fixed; inset:0; background:rgba(0,0,0,.25);
-  display:grid; place-items:center; z-index:1000;
+  position: fixed;
+  inset: 0;
+  padding: 16px;                /* afasta o card das bordas */
+  background: rgba(0,0,0,.35);
+  display: grid;
+  place-items: center;
+  z-index: 2147483000;          /* bem alto para ganhar de qualquer z-index do app */
 }
 .modal-card{
-  width:min(720px, 92vw);
-  background:#fff; border:1px solid var(--border); border-radius:14px;
-  box-shadow:0 20px 80px rgba(0,0,0,.25);
+  width: min(720px, 96vw);      /* 720px no desktop, 96% da viewport no mobile */
+  max-height: calc(100dvh - 32px); /* usa dynamic vh, já descontando o padding do backdrop */
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 80px rgba(0,0,0,.25);
+
+  display: flex;                /* permite header fixo e body rolável */
+  flex-direction: column;
+  overflow: hidden;             /* evita o conteúdo “vazar” para fora do card */
 }
 .modal-head{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 16px; border-bottom:1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
-.modal-body{ padding:16px; }
+.modal-body{
+  padding: 16px;
+  overflow: auto;               /* rolagem só aqui, não na página de fundo */
+  flex: 1 1 auto;
+}
 
 /* Form grid */
 .form.grid{ display:grid; gap:12px; }
@@ -60,24 +81,69 @@
 .btn-primary{ background:#003a8c; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:700; }
 .btn-primary:hover{ background:#012f6d; }
 
+/* -------- Nova paginação -------- */
+.pager{
+  position: sticky;             /* mantém visível no fim da lista */
+  bottom: 0;
+  z-index: 2;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding: 10px 12px;
+
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+}
+.pager-left, .pager-center, .pager-right{
+  display: flex; align-items: center; gap: 10px;
+}
+.pager-center{ justify-content: center; }
+.pager-right{ justify-content: flex-end; }
+
+.pg-size{
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.pg-label{ display: inline-flex; align-items: center; gap: 8px; }
+.pg-input{
+  width: 64px;
+  padding: 6px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.pager button:disabled{ opacity: .5; cursor: not-allowed; }
+.muted{ color:#6b7280; }
+
+/* Acessibilidade/auxiliares */
+.sr-only{
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+.hide-sm{ display:inline; }
+
+/* Responsivo */
 @media (max-width: 900px){
   .grid-2, .grid-3{ grid-template-columns: 1fr; }
   .search{ min-width: 0; width: 100%; }
   .toolbar{ flex-direction:column; align-items:stretch; }
-}
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 14px;
-  margin-top: 16px;
-  font-size: 14px;
-}
-
-.pagination button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  .modal-card{ width: 96vw; }
+  .pager{
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .pager-left, .pager-center, .pager-right{
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .hide-sm{ display:none; }
 }
 
+/* Validações */
 input.invalid { border-color: #dc2626; outline: none; }
 small.error { color: #dc2626; display: block; margin-top: 4px; }

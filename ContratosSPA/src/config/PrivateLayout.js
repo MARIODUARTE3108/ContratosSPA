@@ -14,7 +14,6 @@ export default function PrivateLayout() {
       <div className="content">
         <AppTopbar
           title={`MODEC • SISTEMA DE CONTROLE DE CONTRATOS`}
-          right={'Olá: Mario'}
         />
         <main className="page">
           <Outlet />

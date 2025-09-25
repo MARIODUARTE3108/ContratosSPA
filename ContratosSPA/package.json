@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@tanstack/match-sorter-utils": "^8.19.4",
     "@tanstack/react-table": "^8.21.3",
     "@testing-library/jest-dom": "^5.16.5",
     "axios": "^0.27.2",
