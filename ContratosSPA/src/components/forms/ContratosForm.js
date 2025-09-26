@@ -1,4 +1,3 @@
-// ContratosPage.jsx — com busca/ordenação locais (fuzzy) + paginação server-side
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import "../css/forms.css";
 import {
@@ -12,11 +11,9 @@ import {
 } from "@tanstack/react-table";
 import { rankItem } from "@tanstack/match-sorter-utils";
 
-// Services
 import { getCompany } from "../../services/companies-services";
 import { getContracts, postContract, putContract } from "../../services/contracts-services";
 
-/* ===================== Helpers ===================== */
 const STATUS_MAP = { Ativo: 1, Vencido: 2, Cancelado: 3 };
 const mapStatusTextToNumber = (s) => STATUS_MAP[s] ?? 1;
 const mapStatusNumberToText = (n) =>
@@ -31,7 +28,6 @@ const fmtMoeda = (n) =>
 const fmtDataBR = (iso) => (iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "-");
 const toInputDate = (d) => (d ? String(d).slice(0, 10) : "");
 
-/* ===================== Filtro fuzzy (local) ===================== */
 const fuzzyFilter = (row, columnId, value, addMeta) => {
   const item = String(row.getValue(columnId) ?? "");
   const v = String(value ?? "");
@@ -40,7 +36,6 @@ const fuzzyFilter = (row, columnId, value, addMeta) => {
   return rank.passed;
 };
 
-/* ===================== UI: Modal ===================== */
 function Modal({ open, title, children, onClose }) {
   useEffect(() => {
     if (!open) return;
@@ -69,7 +64,6 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
-/* ===================== Formulário ===================== */
 function ContratoForm({ initial, onSubmit, onCancel }) {
   const [form, setForm] = useState(
     initial ?? {
@@ -104,7 +98,6 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
     );
   }, [initial]);
 
-  // Carrega empresas (com filtro server-side)
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -227,7 +220,6 @@ function ContratoForm({ initial, onSubmit, onCancel }) {
   );
 }
 
-/* ===================== Página Principal ===================== */
 export default function ContratosPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -242,8 +234,6 @@ export default function ContratosPage() {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const { pageIndex, pageSize } = pagination;
 
-  // Híbrido: paginação no servidor; busca/ordenação locais sobre as linhas carregadas
-  // Se quiser buscar/ordenar "o sistema todo", troque para carregar tudo (sem manualPagination)
 
   const columnHelper = createColumnHelper();
   const columns = useMemo(
@@ -288,7 +278,6 @@ export default function ContratosPage() {
     onSortingChange: (updater) => {
       const next = typeof updater === "function" ? updater(sorting) : updater;
       setSorting(next);
-      // como sort é local, não precisamos recarregar; mas resetamos página
       setPagination((p) => ({ ...p, pageIndex: 0 }));
     },
     onGlobalFilterChange: (value) => {
@@ -300,15 +289,12 @@ export default function ContratosPage() {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    // 🔽 comportamento híbrido
-    manualPagination: true,   // paginação vem do servidor
-    // ordenação e filtro **locais**
+    manualPagination: true,   
     filterFns: { fuzzy: fuzzyFilter },
     globalFilterFn: "fuzzy",
     getRowId: (row, index) => row.id ?? row.numero ?? String(index),
   });
 
-  // Carrega contratos (apenas paginação no servidor)
   const load = useCallback(async () => {
     setLoading(true);
     setErrMsg("");
@@ -316,7 +302,6 @@ export default function ContratosPage() {
       const { rows: apiRows, total } = await getContracts({
         page: pageIndex + 1,
         pageSize,
-        // não enviamos sort/search para o backend; são locais
       });
 
       const mapped = (apiRows ?? []).map((u, i) => ({
@@ -347,7 +332,6 @@ export default function ContratosPage() {
 
   const abrirNovo = () => { setEditRow(null); setModalOpen(true); };
 
-  // POST (criar) ou PUT (editar)
   const salvarContrato = async (payload) => {
     try {
       if (payload?.id) {

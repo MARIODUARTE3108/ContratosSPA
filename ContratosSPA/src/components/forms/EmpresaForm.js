@@ -13,7 +13,6 @@ import { rankItem } from "@tanstack/match-sorter-utils";
 
 import { postCompany, getCompany } from "../../services/companies-services";
 
-/* ================= Helpers ================= */
 const onlyDigits = (s = "") => s.replace(/\D/g, "");
 const maskCNPJ = (v = "") => {
   const d = onlyDigits(v).slice(0, 14);
@@ -37,7 +36,6 @@ const maskPhone = (v = "") => {
   );
 };
 
-/* ================ Debounce ================ */
 function useDebouncedValue(value, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -47,7 +45,6 @@ function useDebouncedValue(value, delay = 400) {
   return debounced;
 }
 
-/* ================ Modal ================ */
 function Modal({ open, title, children, onClose }) {
   if (!open) return null;
   return (
@@ -63,7 +60,6 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
-/* ================ Validações ================ */
 const isValidEmail = (email = "") =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(email).trim());
 
@@ -82,7 +78,6 @@ const isValidCNPJ = (cnpjMasked = "") => {
   return resultado === parseInt(digitos.charAt(1), 10);
 };
 
-/* ================ Filtro fuzzy local ================ */
 const fuzzyFilter = (row, columnId, value, addMeta) => {
   const item = String(row.getValue(columnId) ?? "");
   const v = String(value ?? "");
@@ -167,7 +162,6 @@ function EmpresaForm({ onSubmit, onCancel }) {
   );
 }
 
-/* ===== Página principal com paginação server-side + busca/ordenação locais ===== */
 export default function Empresas() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -213,13 +207,12 @@ export default function Empresas() {
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    manualPagination: true, // só a paginação é no servidor
+    manualPagination: true, 
     filterFns: { fuzzy: fuzzyFilter },
     globalFilterFn: "fuzzy",
     getRowId: (row, index) => row.id ?? row.cnpj ?? row.email ?? String(index),
   });
 
-  // Carrega apenas a página (não envia sort/search ao backend; são locais)
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -228,7 +221,6 @@ export default function Empresas() {
         const resp = await getCompany({
           page: pageIndex + 1,
           pageSize,
-          // não enviamos search/sort — busca/ordenação são locais
         });
 
         const mapped = (resp.rows ?? []).map((x) => ({
@@ -251,7 +243,6 @@ export default function Empresas() {
       }
     };
     load();
-    // depende só de paginação, não de globalFilter/sorting (que são locais)
   }, [pageIndex, pageSize]);
 
   const abrirNovo = () => setModalOpen(true);
@@ -259,10 +250,8 @@ export default function Empresas() {
   const salvarEmpresa = async (payload) => {
     try {
       await postCompany(payload);
-      // volta pra primeira página e limpa busca
       setPagination((p) => ({ ...p, pageIndex: 0 }));
       setGlobalFilter("");
-      // recarrega a página atual
       const resp = await getCompany({ page: 1, pageSize });
       const mapped = (resp.rows ?? []).map((x) => ({
         id: x.id,

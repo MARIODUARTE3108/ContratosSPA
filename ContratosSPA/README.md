@@ -1,20 +1,78 @@
-# Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+# ContratosSPA — Front‑end React para Gestão de Contratos (MODEC)
 
-# Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+Frontend **SPA em React** que consome a API de **Contratos** (.NET 8, SQLite, JWT). Inclui autenticação com **token JWT**, páginas de **Pessoas**, **Empresas** e **Contratos**, tabela paginada/ordenável com **TanStack Table**, e integração via **Axios** com interceptors para anexar o token automaticamente.
 
-# Build and Test
-TODO: Describe and show how to build your code and run the tests. 
+---
 
-# Contribute
-TODO: Explain how other users and developers can contribute to make your code better. 
+## ✨ Principais recursos
+- **Login** com JWT (salvo em `sessionStorage` por padrão).
+- **Rotas protegidas** (redireciona para `/login` se não autenticado).
+- **Módulos**: Pessoas, Empresas, Contratos (CRUD).
+- **Tabela** com paginação/filtro/ordenação (TanStack Table).
+- **Serviços Axios** por domínio (`account-services`, `people-services`, `companies-services`, `contracts-services`).
+- **Formatações utilitárias** (CNPJ/CPF, moeda BRL, datas).
+- **Build e Deploy** prontos para Cloudflare Pages, GitHub Pages e Azure Static Web Apps.
+- **Tratamento de erros** e padrão de mensagens para o front.
 
-If you want to learn more about creating good readme files then refer the following [guidelines](https://docs.microsoft.com/en-us/azure/devops/repos/git/create-a-readme?view=azure-devops). You can also seek inspiration from the below readme files:
-- [ASP.NET Core](https://github.com/aspnet/Home)
-- [Visual Studio Code](https://github.com/Microsoft/vscode)
-- [Chakra Core](https://github.com/Microsoft/ChakraCore)
+---
+
+## 🧱 Estrutura de pastas (sugerida)
+
+```
+ContratosSPA/
+  public/
+  src/
+    assets/
+    css/                       # ex.: forms.css
+    components/                # Tabela, Modal, Toast, etc.
+    contexts/                  # AuthContext
+    hooks/
+    layouts/
+    pages/
+      auth/                    # LoginPage.jsx
+      dashboard/
+      people/
+      companies/
+      contracts/
+    routes/                    # ProtectedRoute.jsx
+    services/
+      account-services.js
+      people-services.js
+      companies-services.js
+      contracts-services.js
+      http.js                  # axios instance + interceptors
+      config.js                # getApiUrl() centralizado
+    utils/                     # masks, formatCurrencyBR, etc.
+    App.jsx
+    main.jsx
+  .env.example
+  package.json
+```
+---
+
+## ⚙️ Configuração de ambiente
+
+Crie um `.env` baseado no `.env.example`:
+
+```bash
+REACT_APP_API_URL=http://localhost:5080/api
+REACT_APP_NAME=Contratos MODEC
+REACT_APP_TOKEN_STORAGE=session
+```
+
+## 🚀 Como rodar localmente
+
+### Instalar dependências
+```bash
+npm install
+```
+### Ambiente de desenvolvimento
+
+npm start
+```
+
+### Build de produção
+```bash
+npm run build
+npx serve -s build   # (ou hospede em qualquer servidor estático)
+```

@@ -12,11 +12,9 @@ import Usuarios from './pages/Usuarios';
 export default function Main() {
   return (
     <Routes>
-      {/* Público (sem sidebar) */}
       <Route path="/" element={<AcessarConta />} />
       <Route path="/cadastrar-conta" element={<CadastrarConta />} />
 
-      {/* Privado (com sidebar) */}
       <Route element={<RequireAuth />}>
         <Route element={<PrivateLayout />}>
           <Route path="/inicio" element={<Inicio />} />
