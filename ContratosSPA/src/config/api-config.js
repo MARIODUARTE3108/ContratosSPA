@@ -1,3 +1,3 @@
 export const getApiUrl = () => {
-    return "http://localhost:5000/api";
+    return "https://modecapi-cra8fqbfb7e2hvhv.brazilsouth-01.azurewebsites.net/api";
 }
