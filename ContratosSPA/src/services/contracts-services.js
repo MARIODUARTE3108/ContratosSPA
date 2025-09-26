@@ -1,6 +1,6 @@
 import axios from "axios";
 import * as config from '../config/api-config';
-import { getAccessToken, signOut } from "../helpers/auth-helper"; // <-- ADICIONE ISTO
+import { getAccessToken, signOut } from "../helpers/auth-helper"; 
 
 export const postContract = (data) => {
     const token = getAccessToken();
